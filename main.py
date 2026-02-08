@@ -1,130 +1,147 @@
-# FbCreator_Unblock.py
-# 100% Unblock + High Success
-# প্রক্সি + ডিলে + রিয়েল UA
-
-import requests, random, json, time, re
+import threading
+from queue import Queue
+import requests
+import random
+import string
+import json
+import hashlib
 from faker import Faker
-fake = Faker()
 
-print("\nFbCreator 2025 - UNBLOCK MODE\n")
+print(f"""
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓           
+> › By      :- Jay
+> › Proxy Support Added by Selov
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛                """)
+print('\x1b[38;5;208m⇼'*60)
+print('\x1b[38;5;22m•'*60)
+print('\x1b[38;5;22m•'*60)
+print('\x1b[38;5;208m⇼'*60)
 
-# ========== প্রক্সি লোড কর (ফ্রি) ==========
-def load_free_proxies():
+def generate_random_string(length):
+    letters_and_digits = string.ascii_letters + string.digits
+    return ''.join(random.choice(letters_and_digits) for i in range(length))
+
+def get_mail_domains(proxy=None):
+    url = "https://api.mail.tm/domains"
     try:
-        url = "https://api.proxyscrape.com/v2/?request=get&protocol=http&timeout=10000&country=all&ssl=yes&anonymity=elite"
-        proxies = requests.get(url, timeout=15).text.strip().split("\n")
-        random.shuffle(proxies)
-        return [p for p in proxies if ":" in p][:20]
-    except:
-        print("[-] Proxy API down!")
-        return []
+        response = requests.get(url, proxies=proxy)
+        if response.status_code == 200:
+            return response.json()['hydra:member']
+        else:
+            print(f'[×] E-mail Error : {response.text}')
+            return None
+    except Exception as e:
+        print(f'[×] Error : {e}')
+        return None
 
-proxies = load_free_proxies()
-if not proxies:
-    print("[-] No proxy! Using delay...")
-    proxies = [None]  # fallback
+def create_mail_tm_account(proxy=None):
+    fake = Faker()
+    mail_domains = get_mail_domains(proxy)
+    if mail_domains:
+        domain = random.choice(mail_domains)['domain']
+        username = generate_random_string(10)
+        password = fake.password()
+        birthday = fake.date_of_birth(minimum_age=18, maximum_age=45)
+        first_name = fake.first_name()
+        last_name = fake.last_name()
+        url = "https://api.mail.tm/accounts"
+        headers = {"Content-Type": "application/json"}
+        data = {"address": f"{username}@{domain}", "password":password}       
+        try:
+            response = requests.post(url, headers=headers, json=data, proxies=proxy)
+            if response.status_code == 201:
+                return f"{username}@{domain}", password, first_name, last_name, birthday
+            else:
+                print(f'[×] Email Error : {response.text}')
+                return None, None, None, None, None
+        except Exception as e:
+            print(f'[×] Error : {e}')
+            return None, None, None, None, None
 
-def get_real_ua():
-    uas = [
-        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-        "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
-    ]
-    return random.choice(uas)
+def register_facebook_account(email, password, first_name, last_name, birthday, proxy=None):
+    api_key = '882a8490361da98702bf97a021ddc14d'
+    secret = '62f8ce9f74b12f84c123cc23437a4a32'
+    gender = random.choice(['M', 'F'])
+    req = {'api_key': api_key,'attempt_login': True,'birthday': birthday.strftime('%Y-%m-%d'),'client_country_code': 'EN','fb_api_caller_class': 'com.facebook.registration.protocol.RegisterAccountMethod','fb_api_req_friendly_name': 'registerAccount','firstname': first_name,'format': 'json','gender': gender,'lastname': last_name,'email': email,'locale': 'en_US','method': 'user.register','password': password,'reg_instance': generate_random_string(32),'return_multiple_errors': True}
+    sorted_req = sorted(req.items(), key=lambda x: x[0])
+    sig = ''.join(f'{k}={v}' for k, v in sorted_req)
+    ensig = hashlib.md5((sig + secret).encode()).hexdigest()
+    req['sig'] = ensig
+    api_url = 'https://b-api.facebook.com/method/user.register'
+    reg = _call(api_url, req, proxy)
+    id = reg['new_user_id']
+    token = reg['session_info']['access_token']
+    print(f'''
+-----------GENERATED-----------
+EMAIL : {email}
+ID : {id}
+PASSWORD : {password}
+NAME : {first_name} {last_name}
+BIRTHDAY : {birthday} 
+GENDER : {gender}
+-----------GENERATED-----------
+Token : {token}
+-----------GENERATED-----------''')
+    open('username.txt', 'a')
 
-def get_temp_mail():
-    try:
-        domains = requests.get("https://api.mail.tm/domains", timeout=10).json()['hydra:member']
-        domain = random.choice(domains)['domain']
-        username = fake.user_name()[:8] + str(random.randint(100,999))
-        email = f"{username}@{domain}"
-        password = fake.password(12)
-        requests.post("https://api.mail.tm/accounts", json={"address": email, "password": password}, timeout=10)
-        print(f"[+] Email: {email}")
-        return email, password
-    except:
-        print("[-] Mail.tm down!")
-        return None, None
-
-def register_with_proxy(email, password, first_name, last_name, birthday, proxy=None):
-    session = requests.Session()
-    if proxy:
-        session.proxies = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
-    
-    headers = {
-        "User-Agent": get_real_ua(),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1"
-    }
-    session.headers.update(headers)
-    
-    try:
-        r = session.get("https://m.facebook.com/reg/", timeout=15)
-        if "name=\"lsd\"" not in r.text:
-            return False
-        
-        lsd = re.search('name="lsd" value="([^"]+)"', r.text).group(1)
-        jazoest = re.search('name="jazoest" value="([^"]+)"', r.text).group(1)
-        
-        day, month, year = birthday.day, birthday.month, birthday.year
-        
-        data = {
-            "lsd": lsd,
-            "jazoest": jazoest,
-            "firstname": first_name,
-            "lastname": last_name,
-            "reg_email__": email,
-            "reg_passwd__": password,
-            "birthday_day": str(day),
-            "birthday_month": str(month),
-            "birthday_year": str(year),
-            "sex": "2",
-            "submit": "Sign Up"
-        }
-        
-        r2 = session.post("https://m.facebook.com/reg/", data=data, allow_redirects=False, timeout=15)
-        
-        if r2.status_code in [301, 302]:
-            loc = r2.headers.get("Location", "")
-            if "confirmemail" in loc or "checkpoint" in loc:
-                info = {
-                    "email": email, "mail_password": mail_pass, "fb_password": password,
-                    "name": f"{first_name} {last_name}", "birthday": f"{year}-{month:02d}-{day:02d}",
-                    "proxy_used": proxy or "None"
-                }
-                with open("account_info.txt", "w") as f:
-                    json.dump(info, f, indent=2)
-                print(f"\nACCOUNT CREATED! Proxy: {proxy or 'Local'}")
-                print(f"Check: https://mail.tm")
-                return True
-        return False
-    except:
-        return False
-
-# ============= MAIN =============
-email, mail_pass = get_temp_mail()
-if not email:
-    exit()
-
-first_name = fake.first_name()
-last_name = fake.last_name()
-password = ''.join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=12))
-birthday = fake.date_between(start_date='-35y', end_date='-21y')
-
-print(f"[+] Name: {first_name} {last_name}")
-print(f"[+] DOB: {birthday.strftime('%Y-%m-%d')}")
-print(f"[+] Password: {password}")
-
-# Try with each proxy
-for proxy in proxies:
-    print(f"\n[Try] Proxy: {proxy or 'Local IP'}")
-    if register_with_proxy(email, password, first_name, last_name, birthday, proxy):
-        print("\nMANUALLY VERIFY EMAIL NOW!")
-        break
+def _call(url, params, proxy=None, post=True):
+    headers = {'User-Agent': '[FBAN/FB4A;FBAV/35.0.0.48.273;FBDM/{density=1.33125,width=800,height=1205};FBLC/en_US;FBCR/;FBPN/com.facebook.katana;FBDV/Nexus 7;FBSV/4.1.1;FBBK/0;]'}
+    if post:
+        response = requests.post(url, data=params, headers=headers, proxies=proxy)
     else:
-        print("Failed... trying next proxy...")
-        time.sleep(random.randint(15, 30))
+        response = requests.get(url, params=params, headers=headers, proxies=proxy)
+    return response.json()
+
+def test_proxy(proxy, q, valid_proxies):
+    if test_proxy_helper(proxy):
+        valid_proxies.append(proxy)
+    q.task_done()
+
+def test_proxy_helper(proxy):
+    try:
+        response = requests.get('https://api.mail.tm', proxies=proxy, timeout=5)
+        print(f'Pass: {proxy}')
+        return response.status_code == 200
+    except:
+        print(f'Fail: {proxy}')
+        return False
+
+def load_proxies():
+    with open('proxies.txt', 'r') as file:
+        proxies = [line.strip() for line in file]
+    return [{'http': f'http://{proxy}'} for proxy in proxies]
+
+def get_working_proxies():
+    proxies = load_proxies()
+    valid_proxies = []
+    q = Queue()
+    for proxy in proxies:
+        q.put(proxy)
+    
+    for _ in range(10):  # 10 threads
+        worker = threading.Thread(target=worker_test_proxy, args=(q, valid_proxies))
+        worker.daemon = True
+        worker.start()
+    
+    q.join()  # Block until all tasks are done
+    return valid_proxies
+
+def worker_test_proxy(q, valid_proxies):
+    while True:
+        proxy = q.get()
+        if proxy is None:
+            break
+        test_proxy(proxy, q, valid_proxies)
+
+working_proxies = get_working_proxies()
+
+if not working_proxies:
+    print('[×] No working proxies found. Please check your proxies.')
 else:
-    print("\nAll failed. Try 4G or later.")
+    for i in range(int(input('[+] How Many Accounts You Want:  '))):
+        proxy = random.choice(working_proxies)
+        email, password, first_name, last_name, birthday = create_mail_tm_account(proxy)
+        if email and password and first_name and last_name and birthday:
+            register_facebook_account(email, password, first_name, last_name, birthday, proxy)
+
+print('\x1b[38;5;208m⇼'*60)
